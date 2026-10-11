@@ -12,9 +12,8 @@ using Godot;
 
 namespace Dogeometric.App.Diagnostics;
 
-/// <summary>Help › Report a Problem (F12): a screenshot with the user's marks and words, what lies under each mark, the
-/// app's state, the journal and the model, saved as a folder and a zip under Documents › Dogeometric Reports, and the
-/// zip sent to the developers.</summary>
+/// <summary>Help › Report a Problem (F12, Alt+R or its toolbar button): the marked screenshot, state, journal and model,
+/// saved as a folder and zip under Documents › Dogeometric Reports and sent to the developers.</summary>
 public static partial class ProblemReport
 {
     private const string UploadUrl = "https://reports.cidwel.com/upload";
@@ -30,7 +29,7 @@ public static partial class ProblemReport
             await host.ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
         var shot = host.GetViewport().GetTexture().GetImage();
         Journal.Log("report", "opened");
-        var dialog = new ConfirmationDialog { Title = "Report a Problem", OkButtonText = "Save Report", Theme = LightTheme.Create() };
+        var dialog = new ConfirmationDialog { Title = "Report a Problem", OkButtonText = "Send Report", Theme = LightTheme.Create() };
         var box = new VBoxContainer();
         box.AddChild(new Label { Text = "Drag on the picture to mark what looks wrong (right-click a mark to remove it)." });
         var canvas = new MarkCanvas(shot);

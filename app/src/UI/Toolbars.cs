@@ -19,6 +19,7 @@ public static class Toolbars
     ];
     public static readonly int[] Classifier = [CommandIds.Classifier];
     public static readonly int[] Updates = [Commands.OwnIds.CheckForUpdates];
+    public static readonly int[] ReportProblem = [Commands.OwnIds.ReportProblem];
     public static readonly int[] Tags = [Commands.OwnIds.TagList, Commands.OwnIds.TagsPanel];
     public static readonly int[] Shadows = [Commands.OwnIds.ShadowSettings, 10602, Commands.OwnIds.ShadowDate, Commands.OwnIds.ShadowTime];
 
@@ -179,6 +180,7 @@ public static class Toolbars
         Icons[Commands.ExtensionIds.CameraReset] = "act_reset";
         Icons[Commands.OwnIds.TagsPanel] = "tags_panel";
         Icons[Commands.OwnIds.CheckForUpdates] = "check_updates";
+        Icons[Commands.OwnIds.ReportProblem] = "report_problem";
         Icons[21348] = "display_section_cuts";
         Icons[21349] = "display_section_fill";
         Icons[10602] = "shadows_display";

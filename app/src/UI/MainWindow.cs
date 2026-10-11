@@ -146,9 +146,10 @@ public partial class MainWindow : Control
         ExtensionMenus.Apply(_commands);
 
         _commands.AddToMenu("Help", OwnIds.ReportProblem, "Report a Problem...",
-            "Mark what looks wrong on a picture of the window and save it with the steps that led there and the model.", after: "Contact Us");
+            "Mark what looks wrong on a picture of the window and send it to the developers with the steps that led there and the model.", after: "Contact Us");
         _commands.Register(OwnIds.ReportProblem, () => Diagnostics.ProblemReport.Show(this, _viewport, _document.Document, _document.Path));
         _commands.AddDefaultShortcut("F12", OwnIds.ReportProblem);
+        _commands.AddDefaultShortcut("Alt+R", OwnIds.ReportProblem);
         _commands.AddToMenu("Help", OwnIds.CheckForUpdates, "Check for Updates...",
             "Look for a newer Dogeometric and, if there is one, download and install it.", after: "Report a Problem...");
         _commands.Register(OwnIds.CheckForUpdates, () => Updater.Check(this, Restart));
@@ -208,6 +209,7 @@ public partial class MainWindow : Control
         Bar("Selection Toys", Toolbars.SelectionToys, ToolbarDocks.Dock.Top);
         Bar("Select Curve", Toolbars.SelectCurve, ToolbarDocks.Dock.Top);
         Bar("Updates", Toolbars.Updates, ToolbarDocks.Dock.Top);
+        Bar("Report a Problem", Toolbars.ReportProblem, ToolbarDocks.Dock.Top);
         Bar("Large Tool Set", Toolbars.LargeToolSet, ToolbarDocks.Dock.Left, lines: 2);
         Bar("Standard", Toolbars.Standard, ToolbarDocks.Dock.Top, visible: false);
         Bar("Views", Toolbars.Views, ToolbarDocks.Dock.Top, visible: false);
