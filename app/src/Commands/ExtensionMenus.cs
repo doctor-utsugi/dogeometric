@@ -50,7 +50,8 @@ public static class ExtensionMenus
         [
             new("Intersect", CommandIds.SolidIntersect, null, false), new("Union", CommandIds.SolidUnion, null, false),
             new("Subtract", CommandIds.SolidSubtract, null, false), new("Trim", CommandIds.SolidTrim, null, false),
-            new("Split", CommandIds.SolidSplit, null, false),
+            new("Split", CommandIds.SolidSplit, null, false), new("", null, null, true),
+            new("Repair Mesh...", OwnIds.RepairMesh, null, false),
         ], false));
         registry.SetExtensionMenu("Tools", $$"""
             ---

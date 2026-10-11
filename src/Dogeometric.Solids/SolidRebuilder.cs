@@ -16,6 +16,7 @@ public static class SolidRebuilder
     public static void Build(Entities target, List<Vec3> positions, List<int> tris, IReadOnlyList<PlaneMaterial> sources)
     {
         var verts = positions.Select(target.AddVertex).ToArray();
+        var welder = new Welder(target);
         var count = tris.Count / 3;
         var normals = new Vec3[count];
         for (var i = 0; i < count; i++)
@@ -105,7 +106,7 @@ public static class SolidRebuilder
                 {
                     var va = verts[l[i]];
                     var vb = verts[l[(i + 1) % l.Count]];
-                    var e = target.EdgeBetween(va, vb);
+                    var e = welder.EdgeBetween(va, vb);
                     loop.Edges.Add((e, e.Start != va));
                 }
                 face.Loops.Add(loop);
@@ -117,6 +118,41 @@ public static class SolidRebuilder
             face.Tag = src?.Tag;
             target.Faces.Add(face);
         }
+        Editing.RemoveOrphanVertices(target);
+    }
+
+    /// <summary>
+    /// The triangles as faces of their own, sharing vertices by index (so touching parts stay apart); edges between
+    /// faces meeting at under <paramref name="softAngle"/> degrees are soft and smooth, so the mesh shows as surfaces.
+    /// </summary>
+    public static void BuildTriangles(Entities target, List<Vec3> positions, List<int> tris, double softAngle = 20)
+    {
+        var verts = positions.Select(target.AddVertex).ToArray();
+        var welder = new Welder(target);
+        var faces = new Dictionary<Edge, List<Face>>();
+        for (var i = 0; i + 2 < tris.Count; i += 3)
+        {
+            var loop = new FaceLoop();
+            for (var k = 0; k < 3; k++)
+            {
+                var (va, vb) = (verts[tris[i + k]], verts[tris[i + (k + 1) % 3]]);
+                var e = welder.EdgeBetween(va, vb);
+                loop.Edges.Add((e, e.Start != va));
+            }
+            var face = new Face();
+            face.Loops.Add(loop);
+            target.Faces.Add(face);
+            foreach (var (e, _) in loop.Edges)
+            {
+                if (!faces.TryGetValue(e, out var list))
+                    faces[e] = list = [];
+                list.Add(face);
+            }
+        }
+        var cos = Math.Cos(softAngle * Math.PI / 180);
+        foreach (var (e, list) in faces)
+            if (list.Count == 2 && list[0].Normal.Dot(list[1].Normal) >= cos)
+                e.Flags |= EdgeFlags.Soft | EdgeFlags.Smooth;
         Editing.RemoveOrphanVertices(target);
     }
 

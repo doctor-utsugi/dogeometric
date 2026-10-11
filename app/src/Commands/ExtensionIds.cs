@@ -150,4 +150,7 @@ public static class OwnIds
 
     /// <summary>Help › Check for Updates, also the Updates toolbar's button.</summary>
     public const int CheckForUpdates = 95011;
+
+    /// <summary>Tools › Solid Tools › Repair Mesh.</summary>
+    public const int RepairMesh = 95012;
 }

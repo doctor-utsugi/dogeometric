@@ -2,6 +2,7 @@ using Dogeometric.App.Commands;
 using Dogeometric.App.Tools;
 using Dogeometric.App.UI.Tray;
 using Dogeometric.App.Viewport;
+using Dogeometric.Core.IO;
 using Dogeometric.Core.Modeling;
 using Dogeometric.Solids;
 using Dogeometric.Core.View;
@@ -531,6 +532,34 @@ public partial class MainWindow : Control
         RepairSplitEdges = false,
         EraseStrayEdges = false,
     });
+
+    private void RepairMesh(List<ComponentInstance> targets, MeshRepairOptions options)
+    {
+        var doc = _document.Document;
+        var started = DateTime.Now;
+        var reports = new List<MeshRepairReport>();
+        var results = new List<ComponentInstance>();
+        try
+        {
+            doc.Operation("Repair Mesh", e =>
+            {
+                foreach (var target in targets)
+                {
+                    var (result, report) = SolidTools.RepairMesh(doc.Model, e, target, options);
+                    reports.Add(report);
+                    if (result != null)
+                        results.Add(result);
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _status.SetHint($"Repair Mesh: {ex.Message}");
+            return;
+        }
+        doc.Selection.Set(results);
+        RepairMeshDialog.Summary(this, reports, DateTime.Now - started);
+    }
 
     private void RunCleanUp(CleanUpOptions options)
     {
@@ -1163,6 +1192,16 @@ public partial class MainWindow : Control
         Solid(CommandIds.SolidSubtract, "Subtract", (d, s) => SolidTools.Subtract(d.Model, d.Context.Entities, s[0], s[1]) is { } r ? [r] : []);
         Solid(CommandIds.SolidTrim, "Trim", (d, s) => SolidTools.Trim(d.Model, d.Context.Entities, s[0], s[1]) is { } r ? [r] : []);
         Solid(CommandIds.SolidSplit, "Split", (d, s) => SolidTools.Split(d.Model, d.Context.Entities, s[0], s[1]));
+        (_commands.Get(OwnIds.RepairMesh).Label, _commands.Get(OwnIds.RepairMesh).Description) =
+            ("Repair Mesh...", "Close the holes and gaps of imported meshes (STL, OBJ) so they become solids.");
+        _commands.Register(OwnIds.RepairMesh, () =>
+        {
+            var targets = Doc().Selection.Items.OfType<ComponentInstance>().ToList();
+            if (targets.Count == 0)
+                _status.SetHint("Repair Mesh: select the groups or components to repair.");
+            else
+                RepairMeshDialog.Show(this, options => RepairMesh(targets, options));
+        });
 
         _commands.Register(CommandIds.CloseGroup, () =>
         {

@@ -137,6 +137,111 @@ public static class SolidTools
         }
     }
 
+    /// <summary>
+    /// Repair Mesh (<see cref="MeshRepair"/>) on a group/component; when every shell comes out closed, overlapping
+    /// shells are also merged into one solid. The input is replaced by a new group, like the other Solid Tools;
+    /// null when nothing is left.
+    /// </summary>
+    public static (ComponentInstance? Result, MeshRepairReport Report) RepairMesh(Model model, Entities e, ComponentInstance input, MeshRepairOptions options)
+    {
+        var source = MeshExtractor.ExtractInstance(input);
+        var r = MeshRepair.Run(source, options);
+        var (positions, tris) = (r.Positions, r.Triangles);
+        if (options.MergeShells && r.Report.OpenShells == 0 && r.Bodies.Count > 1)
+        {
+            try
+            {
+                (positions, tris) = Merge(r);
+                r.Report.ShellsMerged = r.Bodies.Count;
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or DllNotFoundException)
+            {
+                r.Report.MergeError = ex.Message;
+            }
+        }
+        r.Report.Slivers = MeshRepair.RemoveSlivers(positions, tris);
+        var check = MeshCheck.Analyze(Enumerable.Range(0, tris.Count / 3)
+            .Select(t => new Triangle(positions[tris[t * 3]], positions[tris[t * 3 + 1]], positions[tris[t * 3 + 2]], null)).ToList());
+        (r.Report.BoundaryEdges, r.Report.NonManifoldEdges) = (check.BoundaryEdges, check.NonManifoldEdges);
+        e.Instances.Remove(input);
+        if (tris.Count == 0)
+            return (null, r.Report);
+
+        var def = new ComponentDefinition { Name = $"Group#{model.Definitions.Count(d => d.IsGroup) + 1}", IsGroup = true };
+        SolidRebuilder.Build(def.Entities, positions, tris, PaintedPlanes(source));
+        // Merging coplanar triangles into faces can lose slivers the repair left; then the triangles stay as they are.
+        var rebuilt = MeshCheck.Analyze(MeshExtractor.ExtractInstance(new ComponentInstance(def)));
+        if (rebuilt.BoundaryEdges + rebuilt.NonManifoldEdges + rebuilt.MisorientedEdges > check.BoundaryEdges + check.NonManifoldEdges + check.MisorientedEdges)
+        {
+            def = new ComponentDefinition { Name = def.Name, IsGroup = true };
+            SolidRebuilder.BuildTriangles(def.Entities, positions, tris);
+        }
+        model.Definitions.Add(def);
+        var inst = e.AddInstance(def, Transform.Identity);
+        inst.Tag = input.Tag;
+        inst.Name = input.Name;
+        return (inst, r.Report);
+    }
+
+    /// <summary>How far each body grows before the union, so parts that only touch overlap and fuse (mm).</summary>
+    private const double FuseGrowth = Tolerance.Length * 5;
+
+    private static (List<Vec3>, List<int>) Merge(MeshRepair.Result r)
+    {
+        var solids = r.Bodies.Select(b => Solid.FromTriangles(Grown(r, b))).ToList();
+        try
+        {
+            var acc = solids[0];
+            for (var i = 1; i < solids.Count; i++)
+            {
+                var next = acc.Union(solids[i]);
+                if (acc != solids[0])
+                    acc.Dispose();
+                acc = next;
+            }
+            var mesh = acc.ToMesh();
+            if (acc != solids[0])
+                acc.Dispose();
+            return mesh;
+        }
+        finally
+        {
+            foreach (var s in solids)
+                s.Dispose();
+        }
+    }
+
+    /// <summary>A body's triangles with every corner moved <see cref="FuseGrowth"/> along its vertex normal.</summary>
+    private static List<Triangle> Grown(MeshRepair.Result r, List<int> body)
+    {
+        var normals = new Dictionary<int, Vec3>();
+        foreach (var t in body)
+        {
+            var (a, b, c) = (r.Triangles[t * 3], r.Triangles[t * 3 + 1], r.Triangles[t * 3 + 2]);
+            var n = (r.Positions[b] - r.Positions[a]).Cross(r.Positions[c] - r.Positions[a]);
+            foreach (var v in new[] { a, b, c })
+                normals[v] = normals.GetValueOrDefault(v) + n;
+        }
+        Vec3 P(int v) => r.Positions[v] + normals[v].Normalized() * FuseGrowth;
+        return body.Select(t => new Triangle(P(r.Triangles[t * 3]), P(r.Triangles[t * 3 + 1]), P(r.Triangles[t * 3 + 2]), null)).ToList();
+    }
+
+    /// <summary>The planes of painted triangles, so the rebuilt faces keep their paint (an STL has none).</summary>
+    private static List<SolidRebuilder.PlaneMaterial> PaintedPlanes(List<Triangle> triangles)
+    {
+        var planes = new Dictionary<(long, long, long, long), SolidRebuilder.PlaneMaterial>();
+        foreach (var t in triangles)
+        {
+            var n = t.Normal;
+            if (t.Material == null || n.IsZero(1e-12))
+                continue;
+            var d = n.Dot(t.A);
+            planes.TryAdd(((long)Math.Round(n.X * 1e5), (long)Math.Round(n.Y * 1e5), (long)Math.Round(n.Z * 1e5), (long)Math.Round(d * 1e3)),
+                new SolidRebuilder.PlaneMaterial(n, d, t.Material, null, null));
+        }
+        return planes.Values.ToList();
+    }
+
     /// <summary>True when the group/component is a closed manifold volume (SketchUp's "Solid Group").</summary>
     public static bool IsSolid(ComponentInstance i) => MeshCheck.Analyze(MeshExtractor.ExtractInstance(i)).IsWatertight;
 
