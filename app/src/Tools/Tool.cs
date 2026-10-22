@@ -1,4 +1,5 @@
 using Dogeometric.App.Viewport;
+using Dogeometric.Core.Modeling;
 using Godot;
 
 namespace Dogeometric.App.Tools;
@@ -55,4 +56,13 @@ public abstract class Tool
     public virtual string VcbValue => "";
 
     protected void RefreshStatus() => Manager.NotifyChanged();
+
+    /// <summary>True, with a hint, when a locked group or component is among the items.</summary>
+    protected bool RefuseLocked(IEnumerable<object> items, string verb)
+    {
+        if (!items.Any(i => i is ComponentInstance { Locked: true }))
+            return false;
+        View.ShowHint($"Locked objects can't be {verb}.");
+        return true;
+    }
 }

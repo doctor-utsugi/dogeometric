@@ -19,7 +19,7 @@ public sealed class SandboxGridTool : DrawingTool
 
     public override int CommandId => ExtensionIds.SandboxFromScratch;
     public override string CursorImage => "pencil";
-    public override string VcbLabel => _clicks.Count == 0 ? "Grid Spacing" : "Length";
+    public override string VcbLabel => _clicks.Count switch { 0 => "Grid Spacing", 1 => "Length", _ => "Width" };
     public override string VcbValue => UI.Measure.Show(_spacing);
     protected override Vec3? From => _clicks.Count > 0 ? _clicks[^1] : null;
 
@@ -36,7 +36,11 @@ public sealed class SandboxGridTool : DrawingTool
     {
         if (button != MouseButton.Left || Current is not { } inf || View.Document is not { } doc)
             return;
-        var p = _clicks.Count == 2 ? InPlane(inf.Point) : inf.Point;
+        AddPoint(doc, _clicks.Count == 2 ? InPlane(inf.Point) : inf.Point);
+    }
+
+    private void AddPoint(Document doc, Vec3 p)
+    {
         _clicks.Add(p);
         if (_clicks.Count < 3)
         {
@@ -83,7 +87,19 @@ public sealed class SandboxGridTool : DrawingTool
             View.ShowVcbValue(VcbValue);
             return true;
         }
-        return false;
+        if (View.Document is not { } doc || Current is not { } inf)
+            return false;
+        var from = _clicks[^1];
+        var toward = _clicks.Count == 1 ? inf.Point - from : InPlane(inf.Point) - from;
+        if (_clicks.Count == 2)
+        {
+            var x = (_clicks[1] - _clicks[0]).Normalized();
+            toward -= x * toward.Dot(x);
+        }
+        if (toward.IsZero(1e-9))
+            return false;
+        AddPoint(doc, from + toward.Normalized() * mm);
+        return true;
     }
 
     public override bool KeyDown(InputEventKey key)

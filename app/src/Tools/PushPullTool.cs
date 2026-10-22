@@ -23,6 +23,7 @@ public sealed class PushPullTool : DrawingTool
     private Vec3 _normal;
     private double _distance;
     private ulong _lastClickMs;
+    private bool _newStart;
 
     public override int CommandId => CommandIds.PushPull;
     public override string CursorImage => _face != null || _hover != null ? "pushpull" : "pushpullno";
@@ -74,12 +75,14 @@ public sealed class PushPullTool : DrawingTool
     {
         if (_face is not { } face || View.Document is not { } doc)
             return;
-        var keep = Input.IsKeyPressed(Key.Ctrl);
-        var offset = LocalOffset(doc, face, _distance);
+        var keep = _newStart;
+        var distance = _distance;
         try
         {
             doc.Preview(_stretch ? "Stretch" : "Push/Pull", e =>
             {
+                // After the revert: a kept base was turned over by the previous preview.
+                var offset = LocalOffset(doc, face, distance);
                 if (offset.Length > Tolerance.Length)
                     Run(e, face, offset, keep);
             });
@@ -97,6 +100,12 @@ public sealed class PushPullTool : DrawingTool
         var now = Time.GetTicksMsec();
         var doubleClick = now - _lastClickMs < 450;
         _lastClickMs = now;
+
+        if (_face != null && doubleClick && _distance == 0 && _lastDistance != 0)
+        {
+            Apply(doc, _face, _lastDistance);
+            return;
+        }
 
         if (_face == null)
         {
@@ -155,19 +164,21 @@ public sealed class PushPullTool : DrawingTool
             }
             _face = null;
             _hover = null;
+            _newStart = false;
             RefreshStatus();
             View.QueueOverlayRedraw();
             return;
         }
         if (Math.Abs(distance) > Tolerance.Length)
         {
-            var keep = Input.IsKeyPressed(Key.Ctrl);
+            var keep = _newStart;
             var offset = LocalOffset(doc, face, distance);
             doc.Operation(_stretch ? "Stretch" : "Push/Pull", e => Run(e, face, offset, keep));
             _lastDistance = distance;
         }
         _face = null;
         _hover = null;
+        _newStart = false;
         RefreshStatus();
         View.QueueOverlayRedraw();
     }
@@ -192,9 +203,11 @@ public sealed class PushPullTool : DrawingTool
 
     public override bool KeyDown(InputEventKey key)
     {
-        if (key.Keycode == Key.Ctrl && !key.Echo && _face != null)
+        if (key.Keycode == Key.Ctrl && !key.Echo)
         {
-            ShowPreview(); // Ctrl toggles "create new starting face": redo with the new mode
+            _newStart = !_newStart;
+            if (_face != null)
+                ShowPreview();
             return false;
         }
         if (key.Keycode == Key.Alt && !key.Echo)
@@ -208,6 +221,7 @@ public sealed class PushPullTool : DrawingTool
         {
             View.Document?.CancelPreview();
             _face = null;
+            _newStart = false;
             RefreshStatus();
             View.QueueOverlayRedraw();
             return true;

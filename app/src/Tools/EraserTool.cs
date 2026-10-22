@@ -65,6 +65,8 @@ public sealed class EraserTool : Tool
         switch (mode)
         {
             case Mode.Erase:
+                if (RefuseLocked(items, "erased"))
+                    break;
                 doc.Selection.Remove(items);
                 doc.Operation("Erase", e => Editing.Erase(e, items));
                 break;

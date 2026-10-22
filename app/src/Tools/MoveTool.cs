@@ -193,6 +193,8 @@ public sealed class MoveTool : DrawingTool
                 return;
             }
             // A point grip: pick the object up by that point of its box.
+            if (RefuseLocked([gripped], "moved"))
+                return;
             _items = [gripped];
             _from = center;
             _lastCopy = null;
@@ -210,6 +212,11 @@ public sealed class MoveTool : DrawingTool
             // Components glued to a moving face go with it.
             var faces = _items.OfType<Face>().ToHashSet();
             _items.AddRange(doc.Context.Entities.Instances.Where(i => i.GluedTo is { } g && faces.Contains(g) && !_items.Contains(i)));
+            if (RefuseLocked(_items, "moved"))
+            {
+                _items = [];
+                return;
+            }
             _from = inf.Point;
             _lastCopy = null;
             Follow();

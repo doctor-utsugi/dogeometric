@@ -17,6 +17,31 @@ public class PushPullTests
     }
 
     [Fact]
+    public void Keeping_the_base_of_a_top_face_pulls_a_new_box_out_above_it()
+    {
+        var e = new Entities();
+        TestModels.Box(e, Vec3.Zero, new Vec3(1000, 600, 300));
+        var top = e.Faces.Single(f => f.Normal.Dot(Vec3.UnitZ) > 0.99);
+        PushPull.Apply(e, top, 200, keepBase: true);
+        Assert.Equal(11, e.Faces.Count);
+        Assert.Equal(500, e.Bounds().Max.Z, 6);
+    }
+
+    [Fact]
+    public void Previewing_a_kept_base_again_and_again_ends_where_a_single_run_does()
+    {
+        var model = new Model();
+        var doc = new Document(model);
+        TestModels.Box(doc.Context.Entities, Vec3.Zero, new Vec3(1000, 600, 300));
+        var top = doc.Context.Entities.Faces.Single(f => f.Normal.Dot(Vec3.UnitZ) > 0.99);
+        foreach (var d in new[] { 120.0, 199.9, 200.0 })
+            doc.Preview("Push/Pull", e => PushPull.Apply(e, top, top.Normal * d, keepBase: true));
+        doc.CommitPreview();
+        Assert.Equal(11, doc.Context.Entities.Faces.Count);
+        Assert.Equal(500, doc.Context.Entities.Bounds().Max.Z, 6);
+    }
+
+    [Fact]
     public void An_offset_off_the_normal_moves_the_cap_by_exactly_that_offset_and_keeps_every_wall_flat()
     {
         var e = new Entities();

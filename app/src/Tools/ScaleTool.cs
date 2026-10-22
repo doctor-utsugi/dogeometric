@@ -66,6 +66,11 @@ public sealed class ScaleTool : DrawingTool
 
     private void SetItems(Document doc, List<object> items)
     {
+        if (RefuseLocked(items, "scaled"))
+        {
+            _items = [];
+            return;
+        }
         _items = items;
         if (items is [ComponentInstance inst])
         {

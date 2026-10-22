@@ -142,6 +142,37 @@ public static class FaceFinder
 
         var cycles = Cycles(edges, To2D);
 
+        // Loops drawn earlier inside the new outline are holes of it, whichever was drawn first.
+        for (var grew = true; grew;)
+        {
+            grew = false;
+            var inside = cycles.Where(c => c.Area > 1e-9).Select(c => c.Points.Select(To2D).ToList()).ToList();
+            foreach (var start in e.Edges.Where(x => InPlane(x) && !edges.Contains(x)).ToList())
+            {
+                if (edges.Contains(start))
+                    continue;
+                var piece = new HashSet<Edge>();
+                var pending = new Queue<Edge>([start]);
+                while (pending.Count > 0)
+                {
+                    var x = pending.Dequeue();
+                    if (edges.Contains(x) || !piece.Add(x))
+                        continue;
+                    foreach (var vert in new[] { x.Start, x.End })
+                        foreach (var next in adjacency.GetValueOrDefault(vert) ?? [])
+                            pending.Enqueue(next);
+                }
+                var corner = To2D(start.Start.Position);
+                if (inside.Any(poly => PointInPolygon(corner, poly)))
+                {
+                    edges.UnionWith(piece);
+                    grew = true;
+                }
+            }
+            if (grew)
+                cycles = Cycles(edges, To2D);
+        }
+
         // Bounded regions (CCW) and component outlines (CW, become holes of their surrounding region).
         var regions = cycles.Where(c => c.Area > 1e-9).OrderBy(c => c.Area).ToList();
         var outlines = cycles.Where(c => c.Area < -1e-9).ToList();

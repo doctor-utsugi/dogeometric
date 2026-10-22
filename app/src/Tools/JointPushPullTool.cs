@@ -172,7 +172,7 @@ public sealed class JointPushPullTool(JointPushPullMode mode, bool quad = false)
             return false;
         if (!_pushing)
             _normal = doc.Context.ToWorld.ApplyNormal(mode == JointPushPullMode.Vector ? MostFacingPlane() : Average()).Normalized();
-        _offset = mm;
+        _offset = (_pushing ? _offset : _lastOffset) < 0 ? -mm : mm;
         Preview();
         Commit(doc);
         return true;

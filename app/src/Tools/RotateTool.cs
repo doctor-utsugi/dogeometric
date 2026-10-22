@@ -63,8 +63,11 @@ public sealed class RotateTool(int commandId = CommandIds.Rotate) : DrawingTool
         if (_center == null)
         {
             _items = doc.Selection.IsEmpty ? ItemUnderCursor(doc, position) : doc.Selection.Items.ToList();
-            if (_items.Count == 0)
+            if (_items.Count == 0 || RefuseLocked(_items, "rotated"))
+            {
+                _items = [];
                 return;
+            }
             _center = inf.Point;
             // On the face under the cursor, on the ground when on the ground, else the axis plane facing the viewer.
             _normal = _lockedNormal ?? (inf.Face is { } f ? inf.EntityToWorld.ApplyNormal(f.Normal)

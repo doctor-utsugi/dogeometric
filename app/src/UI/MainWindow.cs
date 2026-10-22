@@ -1185,6 +1185,8 @@ public partial class MainWindow : Control
                 catch (Exception ex)
                 {
                     _status.SetHint($"{name}: {ex.Message}");
+                    if (ex is DllNotFoundException or BadImageFormatException)
+                        Alert(name, $"The solids library could not be loaded:\n{ex.Message}");
                 }
             }
         }

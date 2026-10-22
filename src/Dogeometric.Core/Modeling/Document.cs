@@ -101,6 +101,8 @@ public sealed class Document
     /// </summary>
     public void Edit(ComponentInstance inst)
     {
+        if (inst.Locked)
+            return;
         if (inst.IsGroup && Grouping.InstanceCount(Model, inst.Definition) > 1)
             Operation("Make Group Unique", _ => Grouping.MakeUnique(Model, inst));
         Context.Enter(inst);
@@ -110,7 +112,9 @@ public sealed class Document
     {
         if (Selection.IsEmpty)
             return;
-        var items = Selection.Items.ToList();
+        var items = Selection.Items.Where(i => i is not ComponentInstance { Locked: true }).ToList();
+        if (items.Count == 0)
+            return;
         Operation("Erase", e => Editing.Erase(e, items));
         Selection.Clear();
     }
