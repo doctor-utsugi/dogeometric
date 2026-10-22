@@ -17,6 +17,37 @@ public class PushPullTests
     }
 
     [Fact]
+    public void An_offset_off_the_normal_moves_the_cap_by_exactly_that_offset_and_keeps_every_wall_flat()
+    {
+        var e = new Entities();
+        var face = e.AddFace([new Vec3(0, 0, 0), new Vec3(100, 0, 0), new Vec3(100, 100, 0), new Vec3(0, 100, 0)]);
+        var offset = new Vec3(20, 0, 50);
+        var cap = PushPull.Apply(e, face, offset);
+        Assert.Equal(6, e.Faces.Count);
+        Assert.All(e.Faces, f => Assert.All(f.OuterLoop.Points, p => Assert.Equal(0, f.Normal.Dot(p - f.OuterLoop.Points.First()), 6)));
+        Assert.Equal(new Vec3(120, 100, 50), e.Bounds().Size);
+        Assert.Equal(50, cap.OuterLoop.Points.First().Z, 6);
+    }
+
+    [Fact]
+    public void A_pocket_pushed_flush_against_another_shares_the_wall_between_them_away()
+    {
+        var e = new Entities();
+        TestModels.Box(e, Vec3.Zero, new Vec3(100, 100, 100));
+        foreach (var (x0, x1) in new[] { (20.0, 50.0), (50.0, 80.0) })
+            StickyGeometry.DrawEdges(e, [new Vec3(x0, 30, 100), new Vec3(x1, 30, 100), new Vec3(x1, 70, 100), new Vec3(x0, 70, 100)], closed: true, Vec3.UnitZ);
+        foreach (var (x0, x1) in new[] { (20.0, 50.0), (50.0, 80.0) })
+        {
+            var square = e.Faces.Single(f => f.Normal.Dot(Vec3.UnitZ) > 0.99 && f.Area < 2000 && f.OuterLoop.Points.All(p => p.X >= x0 - 1e-6 && p.X <= x1 + 1e-6));
+            PushPull.Apply(e, square, -30);
+        }
+        var bad = string.Join("\n", e.Edges.Where(x => Topology.FacesOf(e, x).Count() != 2).Select(x => $"DBG edge {x.Start.Position}->{x.End.Position}: " + string.Join(" | ", Topology.FacesOf(e, x).Select(f => $"n={f.Normal} area={f.Area:0.#}"))));
+        Assert.True(bad.Length == 0, bad);
+        Assert.DoesNotContain(e.Faces, f => Math.Abs(f.Normal.X) > 0.99 && f.OuterLoop.Points.All(p => Math.Abs(p.X - 50) < 1e-6));
+        Assert.Equal(2400, e.Faces.Where(f => f.Normal.Z > 0.99 && Math.Abs(f.OuterLoop.Points.First().Z - 70) < 1e-6).Sum(f => f.Area), 3);
+    }
+
+    [Fact]
     public void Pushing_an_inner_square_to_the_far_face_cuts_a_hole_through()
     {
         // A 100 box, then a 40 square drawn on its top, pushed down the whole height.

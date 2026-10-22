@@ -240,6 +240,8 @@ public partial class MainWindow : Control
         UpdateToolStatus();
         _viewport.GrabFocus();
 
+        GetWindow().FilesDropped += OnFilesDropped;
+
         // `dogeometric model.skp`: open files given on the command line (after Godot's own "--").
         if (OS.GetCmdlineUserArgs().FirstOrDefault(a => File.Exists(a)) is { } file)
             CallDeferred(MethodName.OpenFromCommandLine, file);
@@ -1463,6 +1465,12 @@ public partial class MainWindow : Control
                 return;
             }
         }
+    }
+
+    private void OnFilesDropped(string[] files)
+    {
+        if (files.FirstOrDefault(File.Exists) is { } file)
+            _document.ConfirmDiscard(() => OpenFromCommandLine(file));
     }
 
     /// <summary>A model opens; any other file the importer reads comes into a new model.</summary>

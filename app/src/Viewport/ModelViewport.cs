@@ -801,13 +801,20 @@ public partial class ModelViewport : Control
         return doc.Picker.Pick(doc.Model.Entities, new Ray(origin, direction), tolerance, IsVisible);
     }
 
-    private static bool IsVisible(object o) => o switch
+    public bool ShowHiddenObjects { get; set; }
+
+    /// <summary>What can be picked is what is drawn: hidden geometry and objects only while their View switch is on.</summary>
+    private bool IsVisible(object o)
     {
-        Face f => !f.Hidden && f.Tag is not { Visible: false },
-        Edge e => (e.Flags & (EdgeFlags.Hidden | EdgeFlags.Soft)) == 0 && e.Tag is not { Visible: false },
-        ComponentInstance i => !i.Hidden && i.Tag is not { Visible: false },
-        _ => true,
-    };
+        var hiddenGeometry = Document?.Model.Style.HiddenGeometry == true;
+        return o switch
+        {
+            Face f => (hiddenGeometry || !f.Hidden) && f.Tag is not { Visible: false },
+            Edge e => (hiddenGeometry || (e.Flags & (EdgeFlags.Hidden | EdgeFlags.Soft)) == 0) && e.Tag is not { Visible: false },
+            ComponentInstance i => (ShowHiddenObjects || !i.Hidden) && i.Tag is not { Visible: false },
+            _ => true,
+        };
+    }
 
     /// <summary>
     /// Point under the cursor for zooming: geometry if any, otherwise the point on the ray at the target's depth.

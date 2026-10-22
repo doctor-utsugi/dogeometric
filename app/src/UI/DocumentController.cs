@@ -119,6 +119,7 @@ public sealed class DocumentController(Control host, ModelViewport viewport, Sta
         set
         {
             _renderer.ShowHiddenObjects = value;
+            viewport.ShowHiddenObjects = value;
             Rebuild();
         }
     }

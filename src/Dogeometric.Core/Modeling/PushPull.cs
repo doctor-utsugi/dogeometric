@@ -10,30 +10,37 @@ namespace Dogeometric.Core.Modeling;
 /// </summary>
 public static class PushPull
 {
-    public static Face Apply(Entities e, Face face, double distance, bool keepBase = false)
+    public static Face Apply(Entities e, Face face, double distance, bool keepBase = false) =>
+        Apply(e, face, face.Normal * distance, keepBase);
+
+    /// <summary>Push/pulls by an offset instead of a distance along the normal: in a sheared or unevenly scaled group
+    /// the local normal is not the perpendicular as drawn, so callers pass the local image of the world one.</summary>
+    public static Face Apply(Entities e, Face face, Vec3 offset, bool keepBase = false)
     {
         var normal = face.Normal;
-        var offset = normal * distance;
-        if (Math.Abs(distance) <= Tolerance.Length)
+        var distance = offset.Dot(normal);
+        if (offset.Length <= Tolerance.Length || Math.Abs(distance) <= Tolerance.Length)
             return face;
+        var square = (offset - normal * distance).Length <= 1e-9 * offset.Length;
 
         // A face with no neighbours (a rectangle on its own) keeps itself as the base of the new volume, as SketchUp
         // turns a lone rectangle into a closed box.
         keepBase |= Topology.EdgesOf(face).All(edge => Topology.FacesOf(e, edge).All(f => f == face));
 
-        if (!keepBase && CanSlide(e, face, normal, distance))
+        if (!keepBase && square && CanSlide(e, face, normal, distance))
         {
             foreach (var v in face.Loops.SelectMany(l => l.Vertices).Distinct())
                 v.Position += offset;
             return face;
         }
 
-        // Extrude: a copy of the face at the offset, joined to the original outline by side faces.
+        // Extrude: a copy at the offset joined by side faces; corners landing on existing vertices are welded to them.
+        var edgesBefore = e.Edges.ToHashSet();
         var copies = new Dictionary<Vertex, Vertex>();
         Vertex Moved(Vertex v)
         {
             if (!copies.TryGetValue(v, out var c))
-                copies[v] = c = e.AddVertex(v.Position + offset);
+                copies[v] = c = e.VertexAt(v.Position + offset);
             return c;
         }
 
@@ -98,12 +105,37 @@ public static class PushPull
         else if (distance > 0)
             FaceFinder.Reverse(face); // the kept base now closes the volume from below
 
+        ResolveCoincident(e, sides.Append(cap).ToList(), edgesBefore);
         MergeCoplanarNeighbours(e, sides);
         CancelOpposedOverlaps(e, sides);
-        if (!keepBase && PunchThrough(e, cap))
+        if (e.Faces.Contains(cap) && !keepBase && PunchThrough(e, cap))
             cap = null!;
         Editing.RemoveOrphanVertices(e);
-        return cap;
+        return e.Faces.Contains(cap) ? cap : null!;
+    }
+
+    /// <summary>A new face on exactly the edges of an existing one is dropped if it faces the same way; facing the
+    /// other way both go (two walls meeting). Edges left without a face are removed.</summary>
+    private static void ResolveCoincident(Entities e, List<Face> created, HashSet<Edge> edgesBefore)
+    {
+        HashSet<Edge> EdgeSet(Face f) => Topology.EdgesOf(f).ToHashSet();
+        var freed = new HashSet<Edge>();
+        foreach (var f in created)
+        {
+            if (!e.Faces.Contains(f))
+                continue;
+            var mine = EdgeSet(f);
+            var twin = e.Faces.FirstOrDefault(o => o != f && !created.Contains(o) && o.Loops.Count == f.Loops.Count && EdgeSet(o).SetEquals(mine));
+            if (twin == null)
+                continue;
+            e.Faces.Remove(f);
+            if (f.Normal.Dot(twin.Normal) < 0)
+            {
+                e.Faces.Remove(twin);
+                freed.UnionWith(mine);
+            }
+        }
+        e.Edges.RemoveAll(x => (freed.Contains(x) || !edgesBefore.Contains(x)) && !Topology.FacesOf(e, x).Any());
     }
 
     /// <summary>

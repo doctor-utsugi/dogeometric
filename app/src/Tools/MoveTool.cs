@@ -59,6 +59,7 @@ public sealed class MoveTool : DrawingTool
         if (_from is not { } f || Current is not { } c || View.Document is not { } doc)
             return;
         var offset = Slide(c.Point - f);
+        PreviewLoose(doc, offset);
         // Cutting components carry their opening along: the wall is redrawn (which renews the drawn nodes).
         var cutters = _copy ? [] : _items.OfType<ComponentInstance>().Where(i => i is { GluedTo: not null, Definition.CutsOpening: true }).ToList();
         if (cutters.Count > 0)
@@ -75,6 +76,35 @@ public sealed class MoveTool : DrawingTool
 
     private bool _previewingOpenings;
 
+    /// <summary>Faces and edges have no drawn node to follow the cursor, so the real move or copy is previewed.</summary>
+    private bool Loose => _items.Any(i => i is not ComponentInstance);
+
+    private void PreviewLoose(Document doc, Vec3 worldOffset)
+    {
+        if (!Loose)
+            return;
+        var t = Transform.Translation(doc.Context.ToWorld.Inverse().ApplyVector(worldOffset));
+        var items = _items;
+        if (!_copy && !_autofold && items.OfType<Face>().Any() && Transforming.WouldBend(doc.Context.Entities, items, t))
+        {
+            doc.CancelPreview();
+            return;
+        }
+        try
+        {
+            doc.Preview(_copy ? _stamp ? "Stamp" : "Copy" : "Move", e =>
+            {
+                if (_copy)
+                    Transforming.Copy(e, items, t);
+                else
+                    Transforming.Move(e, items, t.Origin);
+            });
+        }
+        catch (Exception)
+        {
+        }
+    }
+
     /// <summary>Glued components only slide along their face: the offset loses its part along the face's normal.</summary>
     private Vec3 Slide(Vec3 worldOffset)
     {
@@ -90,6 +120,8 @@ public sealed class MoveTool : DrawingTool
     private void Follow()
     {
         Unfollow();
+        if (Loose)
+            return;
         var keys = _items.OfType<ComponentInstance>().Select(i => (ulong)System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(i)).ToHashSet();
         if (keys.Count == 0)
             return;
@@ -141,7 +173,11 @@ public sealed class MoveTool : DrawingTool
         _following.Clear();
     }
 
-    public override void Deactivate() => Unfollow();
+    public override void Deactivate()
+    {
+        Unfollow();
+        View.Document?.CancelPreview();
+    }
 
     public override void MouseDown(MouseButton button, Vector2 position)
     {
@@ -264,6 +300,7 @@ public sealed class MoveTool : DrawingTool
             return;
         }
         Unfollow();
+        doc.CancelPreview();
         var items = _items;
         if (_stamp)
         {
@@ -374,6 +411,7 @@ public sealed class MoveTool : DrawingTool
     private void Cancel()
     {
         Unfollow();
+        View.Document?.CancelPreview();
         _from = null;
         ResetLocks();
         RefreshStatus();

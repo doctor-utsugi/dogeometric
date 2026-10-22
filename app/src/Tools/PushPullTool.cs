@@ -21,7 +21,6 @@ public sealed class PushPullTool : DrawingTool
     private Face? _face;
     private Vec3 _anchor;
     private Vec3 _normal;
-    private Vec3 _localNormal;
     private double _distance;
     private ulong _lastClickMs;
 
@@ -39,12 +38,19 @@ public sealed class PushPullTool : DrawingTool
     };
 
     /// <summary>Push/pulls the face, or in Stretch Mode moves it along its normal so the faces around it stretch.</summary>
-    private static void Run(Entities e, Face face, double distance, bool keep)
+    private static void Run(Entities e, Face face, Vec3 offset, bool keep)
     {
         if (_stretch)
-            Transforming.Move(e, [face], face.Normal.Normalized() * distance);
+            Transforming.Move(e, [face], offset);
         else
-            PushPull.Apply(e, face, distance, keep);
+            PushPull.Apply(e, face, offset, keep);
+    }
+
+    /// <summary>The context-space offset that moves the face along its world normal.</summary>
+    private static Vec3 LocalOffset(Document doc, Face face, double distance)
+    {
+        var toWorld = doc.Context.ToWorld;
+        return toWorld.Inverse().ApplyVector(toWorld.ApplyNormal(face.Normal) * distance);
     }
 
     public override string VcbValue => _face != null ? UI.Measure.Show(_distance) : "";
@@ -68,15 +74,14 @@ public sealed class PushPullTool : DrawingTool
     {
         if (_face is not { } face || View.Document is not { } doc)
             return;
-        var scale = doc.Context.ToWorld.ApplyVector(_localNormal).Length;
         var keep = Input.IsKeyPressed(Key.Ctrl);
-        var d = _distance / scale;
+        var offset = LocalOffset(doc, face, _distance);
         try
         {
             doc.Preview(_stretch ? "Stretch" : "Push/Pull", e =>
             {
-                if (Math.Abs(d) > Tolerance.Length)
-                    Run(e, face, d, keep);
+                if (offset.Length > Tolerance.Length)
+                    Run(e, face, offset, keep);
             });
         }
         catch (Exception)
@@ -110,7 +115,6 @@ public sealed class PushPullTool : DrawingTool
             var hit = View.Pick(position);
             var toWorld = doc.Context.ToWorld;
             _anchor = hit?.Point ?? toWorld.ApplyPoint(face.OuterLoop.Points.First());
-            _localNormal = face.Normal;
             _normal = toWorld.ApplyNormal(face.Normal);
             _distance = 0;
             RefreshStatus();
@@ -157,11 +161,9 @@ public sealed class PushPullTool : DrawingTool
         }
         if (Math.Abs(distance) > Tolerance.Length)
         {
-            // World distance along the world normal → local distance along the local normal.
-            var local = doc.Context.ToWorld;
-            var scale = local.ApplyVector(face.Normal).Length;
             var keep = Input.IsKeyPressed(Key.Ctrl);
-            doc.Operation(_stretch ? "Stretch" : "Push/Pull", e => Run(e, face, distance / scale, keep));
+            var offset = LocalOffset(doc, face, distance);
+            doc.Operation(_stretch ? "Stretch" : "Push/Pull", e => Run(e, face, offset, keep));
             _lastDistance = distance;
         }
         _face = null;
@@ -173,7 +175,7 @@ public sealed class PushPullTool : DrawingTool
     /// <summary>Signed distance along the face normal: snapped geometry projects onto it, otherwise the cursor ray.</summary>
     private double DistanceFromCursor()
     {
-        if (Current is { Kind: InferenceKind.Endpoint or InferenceKind.Midpoint or InferenceKind.Center or InferenceKind.OnEdge or InferenceKind.Origin } snap)
+        if (Current is { Kind: InferenceKind.Endpoint or InferenceKind.Midpoint or InferenceKind.Center or InferenceKind.OnEdge or InferenceKind.OnFace or InferenceKind.Origin } snap)
             return (snap.Point - _anchor).Dot(_normal);
         var ray = View.ScreenRay(Mouse);
         var p = InferenceEngine.ClosestOnLine(new Ray(ray.Origin, ray.Direction), _anchor, _normal);
